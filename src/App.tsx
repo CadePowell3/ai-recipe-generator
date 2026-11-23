@@ -1,122 +1,66 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+﻿import { useState } from "react";
+import type { FormEvent } from "react";
+import { generateClient } from "aws-amplify/data";
+import { useAuthenticator } from "@aws-amplify/ui-react";
+import type { Schema } from "../amplify/data/resource";
 
-function App() {
-  const [count, setCount] = useState(0)
+const client = generateClient<Schema>({ authMode: "userPool" });
+
+export default function App() {
+  const { signOut } = useAuthenticator();
+  const [ingredients, setIngredients] = useState("chicken, rice, broccoli");
+  const [recipe, setRecipe] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function generate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setRecipe("");
+    try {
+      const { data, errors } = await client.queries.askBedrock({
+        ingredients: ingredients.split(",").map((x) => x.trim()).filter(Boolean),
+      });
+      if (errors?.length) {
+        throw new Error(errors.map((x) => x.message).join("; "));
+      }
+      if (data?.error) throw new Error(data.error);
+      if (!data?.body) throw new Error("No recipe returned. Please try again.");
+      setRecipe(data.body);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : String(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+    <main className="panel">
+      <div className="topline">
+        <span>Amazon Bedrock • Claude Haiku 4.5</span>
+        <button className="signout" onClick={signOut}>Sign out</button>
+      </div>
+      <form onSubmit={generate}>
+        <label htmlFor="ingredients">Your ingredients</label>
+        <p>Separate each ingredient with a comma.</p>
+        <input
+          id="ingredients"
+          value={ingredients}
+          onChange={(event) => setIngredients(event.target.value)}
+          required
+        />
+        <button type="submit" disabled={busy || !ingredients.trim()}>
+          {busy ? "Generating your recipe..." : "Generate recipe"}
         </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      </form>
+      {error && <p role="alert" className="error">{error}</p>}
+      {recipe && (
+        <section className="recipe">
+          <h2>Your generated recipe</h2>
+          <div>{recipe}</div>
+        </section>
+      )}
+    </main>
+  );
 }
-
-export default App
